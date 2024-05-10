@@ -4,44 +4,35 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+    "io/ioutil"
 	"os"
+    "encoding/json"
 	"time"
 
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
 
+    "fyne.io/fyne/v2"
+    "fyne.io/fyne/v2/layout"
+    "fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"fyne.io/fyne/v2/data/binding"
 )
 
-type Player struct {
-	elapsed int
-	total   int
-	quit    chan struct{}
+// note: struct fields have to be capital inorder for the json parsing to work, its annoying and ugly I know but such is life with go
+type Audio struct {
+    Author     string `json:"author"`
+	//Set      string
+    Name       string `json:"name"`
+	//Duration time.Duration
 }
 
-type Song struct {
-	artist   string
-	album    string
-	track    string
-	duration time.Duration
-}
-
-func (af ApplicationInterface) Run() {
-	switch af.action {
-	case 0:
-		makeSongRequest()
-	default:
-		fmt.Println("Invalid action")
-	}
-}
-
-func makeSongRequest() {
-	response, err := http.Get("http://localhost:8080/audio?song=phantom_chizh")
+func makeAudioRequest() {
+	response, err := http.Get("http://localhost:8080/audio?file=phantom_chizh")
 	if err != nil {
-		log.Fatal("Failed to make GET request:", err)
+		log.Fatal("Failed to make GET request: ", err)
 	}
 
 	defer response.Body.Close()
@@ -68,7 +59,6 @@ func makeSongRequest() {
 	// Play the audio stream
 	var done = make(chan struct{})
 	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
-		fmt.Println("test")
 		speaker.Clear()
 		close(done)
 	})))
@@ -77,47 +67,95 @@ func makeSongRequest() {
 	<-done
 }
 
+func pauseAudio(isPlaying *bool) {
+    if *isPlaying {
+        speaker.Unlock()
+        *isPlaying = false
+    } else {
+        speaker.Lock()
+        *isPlaying = true
+    }
+}
+
+func fetchAudioList() []Audio {
+    response, err := http.Get("http://localhost:8080/availableAudio")
+    if err != nil {
+        log.Fatal("Failed to make GET request: ", err)
+    }
+    defer response.Body.Close()
+
+    if response.StatusCode != http.StatusOK {
+        log.Fatal("Server responded with status: ", response.Status)
+    }
+
+    // parse response.Body
+    var result []Audio
+    body, err := ioutil.ReadAll(response.Body)
+    if err != nil {
+        panic(err)
+    }
+
+    err = json.Unmarshal(body, &result)
+    if err != nil {
+        panic(err)
+    }
+
+    return result
+}
+
 func main() {
 	// var pm ProcessMan = makeProcessMan(ApplicationInterface{0})
-	// var playing = false
+	var playing = false
 
 	a := app.New()
-	w := a.NewWindow("Hello")
+	w := a.NewWindow("VAMP")
+    w.Resize(fyne.NewSize(1920, 1080))
 
-	hello := widget.NewLabel("Hello Fyne!")
-	w.SetContent(container.NewVBox(
-		hello,
-		widget.NewButton("Hi!", func() {
-			hello.SetText("Welcome :)")
+    audioRaw := fetchAudioList()
+    audioList := binding.NewUntypedList()
+    for _, s := range audioRaw {
+        audioList.Append(s)
+    }
+
+    list := widget.NewListWithData(
+		audioList,
+		func() fyne.CanvasObject {
+            return widget.NewButton("Name - Author", func() {})
+            //return container.NewVBox(
+            //    widget.NewLabel("Name"),
+            //    widget.NewLabel("Author"),
+            //)
+		},
+		func(di binding.DataItem, o fyne.CanvasObject) {
+            ctr, _ := o.(*fyne.Container)
+            //s := ctr.Objects[0].(*widget.Label)
+            //a := ctr.Objects[1].(*widget.Label)
+            button := ctr.Objects[0].(*widget.Button)
+            diu, _ := di.(binding.Untyped).Get()
+            audio := diu.(Audio)
+
+            button.SetText(fmt.Sprintf("%s - %s", audio.Name, audio.Author))
+            button.OnTapped = func() {
+                fmt.Printf("test\n")
+            }
+            //s.SetText(audio.Name)
+            //a.SetText(audio.Author)
+		})
+
+    bar := container.NewVBox(
+		widget.NewButton("Play Phantom", func() {
+            go makeAudioRequest()
 		}),
-	))
+        widget.NewButton("Pause", func() {
+            pauseAudio(&playing)
+        }),
+        widget.NewButton("Quit", func() {
+            os.Exit(0)
+        }),
+    )
 
+    root := fyne.NewContainerWithLayout(layout.NewBorderLayout(nil, bar, nil, nil), bar, bar, list)
+
+	w.SetContent(root)
 	w.ShowAndRun()
-
-	// begin application
-	//for true {
-	//	fmt.Println(tuiMessage)
-	//	fmt.Scanln(&selection)
-	//	switch selection {
-	//	case "q":
-	//		return
-	//	case "p":
-	//		// play song
-	//		go pm.process(0)
-	//	case "d":
-	//		pm.toggleProcess(0)
-	//	case "x":
-	//		// stop song
-	//		if paused {
-	//			speaker.Unlock()
-	//			paused = false
-	//		}else {
-	//			speaker.Lock()
-	//			paused = true
-	//		}
-	//	default:
-	//		fmt.Println("Sorry that input was invalid")
-	//		return
-	//	}
-	//}
 }
