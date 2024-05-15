@@ -1,77 +1,98 @@
 // VAMP! - VAMP (is not) a Music Platform!
-// package main
+ package main
 
-// import (
-// 	"fmt"
-// 	"time"
-// )
+ import (
+ 	"fmt"
+ 	"time"
+ )
 
-// type Runnable interface {
-// 	Run()
-// }
+ type State struct {
+     cs int
+     pm *ProcessMan
+ }
 
-// type MyFunc struct {
-// 	message string
-// }
+ type Runnable interface {
+ 	Run()
+ }
 
-// type PROC chan struct{}
-// var second = time.Second
+ type MyFunc struct {
+ 	message string
+ }
 
-// // process manager
-// type ProcessMan struct {
-// 	processes []PROC
-// 	runnables []Runnable
-// }
+ type PROC chan struct{}
+ var second = time.Second
 
-// func makeProcessMan(runs ...Runnable) ProcessMan {
-// 	size := len(runs)
-// 	procs := make([]PROC, size)
-// 	runnables := make([]Runnable, size)
-// 	for i := 0; i < size; i++ {
-// 		procs[i] = make(PROC)
-// 		runnables[i] = runs[i]
-// 	}
-// 	return ProcessMan{procs, runnables}
-// }
+ // process manager
+ type ProcessMan struct {
+ 	processes []PROC
+ 	runnables []Runnable
+ }
 
-// func (pm *ProcessMan) process(id int) {
-// 	proc := pm.processes[id]
-// 	runnable := pm.runnables[id]
-// 	for {
-// 		select {
-// 		case <-proc:
-// 			<-proc
-// 			fmt.Println("worker is paused")
-// 		default:
-// 			runnable.Run()
-// 			time.Sleep(second)
-// 		}
-// 	}
-// }
+ func makeProcessMan(runs ...Runnable) ProcessMan {
+ 	size := len(runs)
+ 	procs := make([]PROC, size)
+ 	runnables := make([]Runnable, size)
+ 	for i := 0; i < size; i++ {
+ 		procs[i] = make(PROC)
+ 		runnables[i] = runs[i]
+ 	}
+ 	return ProcessMan{procs, runnables}
+ }
 
-// func (pm *ProcessMan) toggleProcess(id int) {
-// 	pm.processes[id] <- struct{}{}
-// }
+ func (pm *ProcessMan) process(id int) {
+ 	proc := pm.processes[id]
+ 	runnable := pm.runnables[id]
+ 	for {
+ 		select {
+ 		case <-proc:
+ 			<-proc
+ 			fmt.Println("worker is paused")
+ 		default:
+ 			runnable.Run()
+ 			time.Sleep(second)
+ 		}
+ 	}
+ }
 
-// func (mf MyFunc) Run() {
-// 	fmt.Println(mf.message)
-// }
+ func (pm *ProcessMan) toggleProcess(id int) {
+ 	pm.processes[id] <- struct{}{}
+ }
 
-// func main() {
-// 	var pm ProcessMan = makeProcessMan(MyFunc{message: "proc zero"}, MyFunc{message: "proc one"})
+ func (mf MyFunc) Run() {
+ 	fmt.Println(mf.message)
+ }
 
-// 	go pm.process(0)
-// 	go pm.process(1)
-// 	pm.toggleProcess(1)
+ func spawn(s *State) {
+     if (s.cs == 0) {
+         s.pm.toggleProcess(0)
+         s.pm.toggleProcess(1)
+         s.cs = 1
+     } else if (s.cs == 1) {
+         s.cs = 0
+     }
 
-// 	time.Sleep(5 * time.Second)
-// 	fmt.Println("Pausing proc 0 // unpausing proc 1")
-// 	pm.toggleProcess(0)
-// 	pm.toggleProcess(1)
+ }
 
-// 	time.Sleep(5 * time.Second)
+ func main() {
+ 	var pm ProcessMan = makeProcessMan(MyFunc{message: "proc zero"}, MyFunc{message: "proc one"})
+    var state = State{&pm}
 
-// 	pm.toggleProcess(1)
-// 	fmt.Println("unpausing worker")
-// 	pm.toggleProcess(0)
-// }
+    spawn(state)
+    time.Sleep(3 * time.Second)
+    spawn(state)
+
+ 	//go state.pm.process(0)
+ 	//go state.pm.process(1)
+ 	//state.pm.toggleProcess(1)
+
+ 	//time.Sleep(5 * time.Second)
+ 	//fmt.Println("Pausing proc 0 // unpausing proc 1")
+ 	//state.pm.toggleProcess(0)
+ 	//state.pm.toggleProcess(1)
+
+ 	//time.Sleep(5 * time.Second)
+
+ 	//state.pm.toggleProcess(1)
+ 	//fmt.Println("unpausing worker")
+ 	//state.pm.toggleProcess(0)
+ }

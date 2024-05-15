@@ -7,16 +7,57 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-    "log"
+    "bytes"
+
+	"github.com/hajimehoshi/go-mp3"
 )
 
+func serverLog(message string, funcOfOrigin string) {
+    fmt.Printf("[server: %s] %s\n", funcOfOrigin, message)
+}
+
+func fatalServerLog(message string, funcOfOrigin string) {
+    serverLog(message, funcOfOrigin)
+    panic(1)
+}
+
 type FileModel struct {
-    Name   string `json:"name"`
-    Author string `json:"author"`
+    Name     string `json:"name"`
+    Author   string `json:"author"`
+    Duration int64  `json:"duration"`
+}
+
+func readAudio(filename string) []byte {
+    var f = filename
+    if (!strings.Contains(filename, ".mp3")) {
+        f = filename + ".mp3"
+    }
+
+    var filepath = fmt.Sprintf("../assets/%s", f)
+    data, err := ioutil.ReadFile(filepath)
+    if err != nil {
+        fatalServerLog("cannot read audio file", "readAudio")
+    }
+    return data
+}
+
+func readAudioDuration(filename string) int64 {
+    var data = readAudio(filename)
+
+    decoder, err := mp3.NewDecoder(bytes.NewReader(data))
+    if err != nil {
+        fatalServerLog("can't get audio length", "readAudioDuration")
+    }
+
+    // for some reason multiplying by a sample rate of 52000 will result an approximate calculation of the length of the audio
+    // this is despite two go audio libraries telling me the sample rate is 48000, 48000 just does not calculate the right times
+    duration := (decoder.Length() * 52000) / 10000000000
+
+    return duration
 }
 
 func audioHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("handling song request...")
+    serverLog("handling song request...", "audioHandler")
 
 	// process uri to get requested song
 	var uri string = r.RequestURI
@@ -28,14 +69,9 @@ func audioHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var audioName = strings.ToUpper(delimited[1]) // index 1 will always have the song name
-	var filepath = "../assets/" + audioName + ".mp3"
 
 	// Open the audio file
-	data, err := ioutil.ReadFile(filepath)
-	if err != nil {
-		http.Error(w, "Could not open audio file", http.StatusInternalServerError)
-		return
-	}
+    var data = readAudio(audioName)
 
 	// Set the content type header
 	w.Header().Set("Content-Type", "audio/mpeg")
@@ -63,14 +99,17 @@ func processFilename(filename string) FileModel {
     name = prettify(name)
     author = prettify(author)
 
-    return FileModel{name, author}
+    // get duration 
+    var duration = readAudioDuration(filename)
+
+    return FileModel{name, author, duration}
 }
 
 func getAvailableAudio(w http.ResponseWriter, r *http.Request) {
     // get audio file names
     files, err := ioutil.ReadDir("../assets/")
     if err != nil {
-        log.Fatalf("Error reading directory: %s\n", err);
+        fatalServerLog(fmt.Sprintf("Error reading directory %s", err), "getAvailableAudio")
     }
 
     // process file names into go model and then into json

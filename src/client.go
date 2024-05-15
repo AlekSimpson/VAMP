@@ -8,6 +8,7 @@ import (
 	"os"
     "encoding/json"
 	"time"
+    "strings"
 
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/mp3"
@@ -21,19 +22,36 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 )
 
+type AppState struct {
+    playing       bool
+    audio         Audio
+    elapsedTime   binding.Float
+    audioSelected bool 
+}
+
 // note: struct fields have to be capital inorder for the json parsing to work, its annoying and ugly I know but such is life with go
 type Audio struct {
     Author     string `json:"author"`
 	//Set      string
     Name       string `json:"name"`
-	//Duration time.Duration
+    Duration   int64  `json:"duration"`
 }
 
-func makeAudioRequest() {
-	response, err := http.Get("http://localhost:8080/audio?file=phantom_chizh")
+func makeAudioRequest(as *AppState, name string, author string, duration int64) {
+    fmt.Println("[DEBUG] BEGINNING PLAY FUNCTION")
+    var request = codifyAudioEntry(name, author)
+    var url = fmt.Sprintf("http://localhost:8080/audio?file=%s", request)
+    if (request == "") {
+        log.Fatal("Cannot make empty request")
+        panic(1)
+    }
+    fmt.Println("[DEBUG] PASSED REQUEST CHECK")
+
+    response, err := http.Get(url)
 	if err != nil {
 		log.Fatal("Failed to make GET request: ", err)
 	}
+    fmt.Println("[DEBUG] PASSED RESPONSE CHECK")
 
 	defer response.Body.Close()
 
@@ -42,6 +60,7 @@ func makeAudioRequest() {
 		fmt.Println(response.Body)
 		log.Fatal("Server responded with status: ", response.Status)
 	}
+    fmt.Println("[DEBUG] PASSED STATUS CHECK")
 
 	// Decode the MP3 audio stream
 	streamer, format, err := mp3.Decode(response.Body)
@@ -49,31 +68,80 @@ func makeAudioRequest() {
 		log.Fatal("Failed to decode audio: ", err)
 	}
 	defer streamer.Close()
+    fmt.Println("[DEBUG] PASSED STREAMER CHECK")
+    fmt.Printf("streamer is: \n")
+    fmt.Println(streamer)
+    fmt.Printf("format is: \n")
+    fmt.Println(format)
+    fmt.Printf("err is: \n")
+    fmt.Println(err)
 
 	// Initialize the speaker with the audio format
 	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+    fmt.Printf("[DEBUG] ERR IS: %s\n", err)
 	if err != nil {
 		log.Fatal("Failed to initialize speaker: ", err)
+        fmt.Println("[DEBUG] ABORT SPEAKER FAILED TO INITIALIZE")
 	}
+    fmt.Println("[DEBUG] PASSED SPEAKER CHECK")
 
 	// Play the audio stream
-	var done = make(chan struct{})
+	var done = make(chan bool)
 	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
-		speaker.Clear()
-		close(done)
+	    speaker.Clear()
+	    close(done)
 	})))
+    fmt.Println("[DEBUG] PASSED PLAYING CODE")
 
-	// Wait for the audio to finish playing
-	<-done
+    // reset so that this audio can play
+    time.Sleep(time.Second / 5)
+    as.audioSelected = false;
+
+    fmt.Println("[DEBUG] BEGINNING FOR LOOP")
+    for {
+        if (as.audioSelected) {
+            fmt.Println("[client: makeAudioRequest] finished streamer")
+            <-done
+            return
+        }
+
+        // elapsed time in seconds
+        var elapsed int64 = int64(format.SampleRate.D(streamer.Position()).Round(time.Second) / 1000000000)
+        var percent = float64(elapsed) / float64(duration)
+
+        fmt.Printf("[client] elapsed time: %d, duration: %d, percentage: %.2f\n", elapsed, duration, percent)
+
+        as.elapsedTime.Set(percent)
+        if percent >= 1.0 {
+            as.audioSelected = true; // break the loop
+        }
+        time.Sleep(time.Second / 2)
+    }
 }
 
-func pauseAudio(isPlaying *bool) {
-    if *isPlaying {
-        speaker.Unlock()
-        *isPlaying = false
-    } else {
+func removeMP3Tag(str string) string {
+    var delimited = strings.Split(str, ".")
+    return delimited[0]
+}
+ 
+func codifyAudioEntry(name string, authorRaw string) string {
+    // remove .mp3
+    var author = removeMP3Tag(authorRaw)
+
+    // begin splicing
+    var splice = fmt.Sprintf("%s_%s", name, author)
+    splice = strings.ReplaceAll(splice, " ", "-")
+    splice = strings.ToUpper(splice)
+    return splice
+}
+
+func pauseAudio(as *AppState) {
+    if as.playing {
         speaker.Lock()
-        *isPlaying = true
+        as.playing = false
+    } else {
+        speaker.Unlock()
+        as.playing = true
     }
 }
 
@@ -104,50 +172,41 @@ func fetchAudioList() []Audio {
 }
 
 func main() {
-	// var pm ProcessMan = makeProcessMan(ApplicationInterface{0})
-	var playing = false
-
 	a := app.New()
 	w := a.NewWindow("VAMP")
     w.Resize(fyne.NewSize(1920, 1080))
 
     audioRaw := fetchAudioList()
-    audioList := binding.NewUntypedList()
-    for _, s := range audioRaw {
-        audioList.Append(s)
-    }
 
-    list := widget.NewListWithData(
-		audioList,
-		func() fyne.CanvasObject {
+    elapsedBinding := binding.NewFloat()
+    progressBar := widget.NewProgressBarWithData(elapsedBinding)
+
+    var as = AppState{false, Audio{"", "", 0}, elapsedBinding, false}
+
+    list := widget.NewList(
+        func() int {
+            return len(audioRaw)
+        },
+        func() fyne.CanvasObject {
             return widget.NewButton("Name - Author", func() {})
-            //return container.NewVBox(
-            //    widget.NewLabel("Name"),
-            //    widget.NewLabel("Author"),
-            //)
-		},
-		func(di binding.DataItem, o fyne.CanvasObject) {
-            ctr, _ := o.(*fyne.Container)
-            //s := ctr.Objects[0].(*widget.Label)
-            //a := ctr.Objects[1].(*widget.Label)
-            button := ctr.Objects[0].(*widget.Button)
-            diu, _ := di.(binding.Untyped).Get()
-            audio := diu.(Audio)
-
-            button.SetText(fmt.Sprintf("%s - %s", audio.Name, audio.Author))
+        },
+        func (i widget.ListItemID, o fyne.CanvasObject) {
+            button := o.(*widget.Button)
+            button.SetText(fmt.Sprintf("%s - %s", audioRaw[i].Name, removeMP3Tag(audioRaw[i].Author)))
+            button.Alignment = widget.ButtonAlignLeading
             button.OnTapped = func() {
-                fmt.Printf("test\n")
+                go func() {
+                    //as.playing = true
+                    as.audioSelected = true
+                    makeAudioRequest(&as, audioRaw[i].Name, audioRaw[i].Author, audioRaw[i].Duration)
+                }()
             }
-            //s.SetText(audio.Name)
-            //a.SetText(audio.Author)
-		})
+        })
 
     bar := container.NewVBox(
-		widget.NewButton("Play Phantom", func() {
-            go makeAudioRequest()
-		}),
+        progressBar,
         widget.NewButton("Pause", func() {
-            pauseAudio(&playing)
+            pauseAudio(&as)
         }),
         widget.NewButton("Quit", func() {
             os.Exit(0)
@@ -159,3 +218,10 @@ func main() {
 	w.SetContent(root)
 	w.ShowAndRun()
 }
+
+
+/*
+TODO: 
+1. Currently pause button breaks program if you press it while a song is not being played
+
+*/
