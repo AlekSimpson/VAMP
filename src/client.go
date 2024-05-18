@@ -77,13 +77,14 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
     fmt.Println(err)
 
 	// Initialize the speaker with the audio format
-	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-    fmt.Printf("[DEBUG] ERR IS: %s\n", err)
-	if err != nil {
-		log.Fatal("Failed to initialize speaker: ", err)
-        fmt.Println("[DEBUG] ABORT SPEAKER FAILED TO INITIALIZE")
-	}
-    fmt.Println("[DEBUG] PASSED SPEAKER CHECK")
+	//err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+    speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+    //fmt.Printf("[DEBUG] ERR IS: %s\n", err)
+	//if err != nil {
+	//	log.Fatal("Failed to initialize speaker: ", err)
+    //    fmt.Println("[DEBUG] ABORT SPEAKER FAILED TO INITIALIZE")
+	//}
+    //fmt.Println("[DEBUG] PASSED SPEAKER CHECK")
 
 	// Play the audio stream
 	var done = make(chan bool)
@@ -101,6 +102,8 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
     for {
         if (as.audioSelected) {
             fmt.Println("[client: makeAudioRequest] finished streamer")
+            speaker.Clear()
+            close(done)
             <-done
             return
         }
@@ -205,7 +208,7 @@ func main() {
 
     bar := container.NewVBox(
         progressBar,
-        widget.NewButton("Pause", func() {
+        widget.NewButton("Pause [OUT OF ORDER]", func() {
             pauseAudio(&as)
         }),
         widget.NewButton("Quit", func() {
