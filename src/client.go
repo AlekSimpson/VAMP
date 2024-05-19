@@ -38,21 +38,17 @@ type Audio struct {
 }
 
 func makeAudioRequest(as *AppState, name string, author string, duration int64) {
-    fmt.Println("[DEBUG] BEGINNING PLAY FUNCTION")
     var request = codifyAudioEntry(name, author)
     var url = fmt.Sprintf("http://localhost:8080/audio?file=%s", request)
     if (request == "") {
         log.Fatal("Cannot make empty request")
         panic(1)
     }
-    fmt.Println("[DEBUG] PASSED REQUEST CHECK")
 
     response, err := http.Get(url)
 	if err != nil {
 		log.Fatal("Failed to make GET request: ", err)
 	}
-    fmt.Println("[DEBUG] PASSED RESPONSE CHECK")
-
 	defer response.Body.Close()
 
 	// Check if the response status code is OK
@@ -60,7 +56,6 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
 		fmt.Println(response.Body)
 		log.Fatal("Server responded with status: ", response.Status)
 	}
-    fmt.Println("[DEBUG] PASSED STATUS CHECK")
 
 	// Decode the MP3 audio stream
 	streamer, format, err := mp3.Decode(response.Body)
@@ -68,23 +63,9 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
 		log.Fatal("Failed to decode audio: ", err)
 	}
 	defer streamer.Close()
-    fmt.Println("[DEBUG] PASSED STREAMER CHECK")
-    fmt.Printf("streamer is: \n")
-    fmt.Println(streamer)
-    fmt.Printf("format is: \n")
-    fmt.Println(format)
-    fmt.Printf("err is: \n")
-    fmt.Println(err)
 
 	// Initialize the speaker with the audio format
-	//err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
     speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-    //fmt.Printf("[DEBUG] ERR IS: %s\n", err)
-	//if err != nil {
-	//	log.Fatal("Failed to initialize speaker: ", err)
-    //    fmt.Println("[DEBUG] ABORT SPEAKER FAILED TO INITIALIZE")
-	//}
-    //fmt.Println("[DEBUG] PASSED SPEAKER CHECK")
 
 	// Play the audio stream
 	var done = make(chan bool)
@@ -92,19 +73,13 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
 	    speaker.Clear()
 	    close(done)
 	})))
-    fmt.Println("[DEBUG] PASSED PLAYING CODE")
 
-    // reset so that this audio can play
-    time.Sleep(time.Second / 5)
-    as.audioSelected = false;
-
-    fmt.Println("[DEBUG] BEGINNING FOR LOOP")
     for {
         if (as.audioSelected) {
             fmt.Println("[client: makeAudioRequest] finished streamer")
             speaker.Clear()
-            close(done)
             <-done
+            close(done)
             return
         }
 
@@ -118,7 +93,7 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
         if percent >= 1.0 {
             as.audioSelected = true; // break the loop
         }
-        time.Sleep(time.Second / 2)
+        time.Sleep(time.Second / 10)
     }
 }
 
@@ -198,9 +173,16 @@ func main() {
             button.SetText(fmt.Sprintf("%s - %s", audioRaw[i].Name, removeMP3Tag(audioRaw[i].Author)))
             button.Alignment = widget.ButtonAlignLeading
             button.OnTapped = func() {
+                // first clear the speaker if anything is currently playing
+                speaker.Clear()
+                // next signal to the previous song playing thread that it needs to shutdown
+                as.audioSelected = true
+                // give that thread time to shutdown before the new one
+                time.Sleep(time.Second / 2)
+                // turn shutdown signal off so that new thread can play next song
+                as.audioSelected = false
                 go func() {
-                    //as.playing = true
-                    as.audioSelected = true
+                    as.playing = true
                     makeAudioRequest(&as, audioRaw[i].Name, audioRaw[i].Author, audioRaw[i].Duration)
                 }()
             }
@@ -208,7 +190,7 @@ func main() {
 
     bar := container.NewVBox(
         progressBar,
-        widget.NewButton("Pause [OUT OF ORDER]", func() {
+        widget.NewButton("Pause", func() {
             pauseAudio(&as)
         }),
         widget.NewButton("Quit", func() {
