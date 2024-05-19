@@ -37,7 +37,7 @@ type Audio struct {
     Duration   int64  `json:"duration"`
 }
 
-func makeAudioRequest(as *AppState, name string, author string, duration int64) {
+func makeAudioRequest(as *AppState, name string, author string, duration int64, verbose bool) {
     var request = codifyAudioEntry(name, author)
     var url = fmt.Sprintf("http://localhost:8080/audio?file=%s", request)
     if (request == "") {
@@ -58,43 +58,61 @@ func makeAudioRequest(as *AppState, name string, author string, duration int64) 
 	}
 
 	// Decode the MP3 audio stream
-	streamer, format, err := mp3.Decode(response.Body)
+	decoder, format, err := mp3.Decode(response.Body)
+    fmt.Printf("streamer type: %T\n", decoder)
 	if err != nil {
 		log.Fatal("Failed to decode audio: ", err)
 	}
-	defer streamer.Close()
+    decoder.Close()
 
 	// Initialize the speaker with the audio format
     speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 
 	// Play the audio stream
 	var done = make(chan bool)
-	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
+	speaker.Play(beep.Seq(decoder, beep.Callback(func() {
 	    speaker.Clear()
 	    close(done)
 	})))
 
     for {
         if (as.audioSelected) {
-            fmt.Println("[client: makeAudioRequest] finished streamer")
+            fmt.Println("[client: makeAudioRequest] finished playback")
             speaker.Clear()
             <-done
             close(done)
             return
         }
 
-        // elapsed time in seconds
-        var elapsed int64 = int64(format.SampleRate.D(streamer.Position()).Round(time.Second) / 1000000000)
+        // calculate elapsed time in seconds
+        var elapsed int64 = int64(format.SampleRate.D(decoder.Position()).Round(time.Second) / 1000000000)
         var percent = float64(elapsed) / float64(duration)
 
-        fmt.Printf("[client] elapsed time: %d, duration: %d, percentage: %.2f\n", elapsed, duration, percent)
+        if verbose {
+            fmt.Printf("[client] elapsed time: %d, duration: %d, percentage: %.2f\n", elapsed, duration, percent)
+        }
 
         as.elapsedTime.Set(percent)
         if percent >= 1.0 {
             as.audioSelected = true; // break the loop
         }
-        time.Sleep(time.Second / 10)
+        time.Sleep(time.Second / 10) // update only every 10th of a second
     }
+}
+
+func playSong(as *AppState, name string, author string, duration int64) {
+    // first clear the speaker if anything is currently playing
+    speaker.Clear()
+    // next signal to the previous song playing thread that it needs to shutdown
+    as.audioSelected = true
+    // give that thread time to shutdown before the new one (needs to be more than 1/10 a second)
+    time.Sleep(time.Second / 5)
+    // turn shutdown signal off so that new thread can play next song
+    as.audioSelected = false
+    go func() {
+        as.playing = true
+        makeAudioRequest(as, name, author, duration, false) // false at the end is for turning off verbose
+    }()
 }
 
 func removeMP3Tag(str string) string {
@@ -173,18 +191,7 @@ func main() {
             button.SetText(fmt.Sprintf("%s - %s", audioRaw[i].Name, removeMP3Tag(audioRaw[i].Author)))
             button.Alignment = widget.ButtonAlignLeading
             button.OnTapped = func() {
-                // first clear the speaker if anything is currently playing
-                speaker.Clear()
-                // next signal to the previous song playing thread that it needs to shutdown
-                as.audioSelected = true
-                // give that thread time to shutdown before the new one
-                time.Sleep(time.Second / 2)
-                // turn shutdown signal off so that new thread can play next song
-                as.audioSelected = false
-                go func() {
-                    as.playing = true
-                    makeAudioRequest(&as, audioRaw[i].Name, audioRaw[i].Author, audioRaw[i].Duration)
-                }()
+                playSong(&as, audioRaw[i].Name, audioRaw[i].Author, audioRaw[i].Duration)
             }
         })
 
