@@ -115,7 +115,7 @@ func getAvailableAudio(w http.ResponseWriter, r *http.Request) {
     // process file names into go model and then into json
     var fileModels = make([]FileModel, len(files))
     for i, file := range files {
-        fileModels[i] = processFilename(file.Name())
+	    fileModels[i] = processFilename(file.Name())
     }
 
     jsonData, err := json.Marshal(fileModels)

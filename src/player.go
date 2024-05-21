@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"io/ioutil"
+	"encoding/json"
 	"net/http"
 	"time"
     "strings"
@@ -29,6 +31,20 @@ type Player struct {
     elapsedTime      binding.Float
     killThreadSignal bool
     verbose          bool
+}
+
+func (p *Player) guardedPrint(format string, args ...any) {
+	if p.verbose {
+		fmt.Printf(format, args)
+	}
+}
+
+func newPlayer(v bool) (*Player) {
+	return &Player{false, nil, binding.NewFloat(), false, v}
+}
+
+func (p *Player) bindElapsedTime(et binding.Float) {
+	p.elapsedTime = et;
 }
 
 func removeMP3Tag(str string) string {
@@ -64,44 +80,51 @@ func (p *Player) makeGetRequest(url string) *http.Response {
     return response
 }
 
-func (p *Player) loadStreamerFormat(response *http.Response) (*mp3.decoder, beep.Format) {
+func (p *Player) loadStreamerFormat(response *http.Response) (beep.StreamSeekCloser, beep.Format) {
 	// Decode the MP3 audio stream
-	decoder, format, err := mp3.Decode(response.Body)
+	streamer, format, err := mp3.Decode(response.Body)
 	if err != nil {
 		log.Fatal("Failed to decode audio: ", err)
         panic(1)
 	}
 
-    return decoder, format
+    return streamer, format
 }
 
-func (p *Player) makeAudioRequest(name string, author string, duration int64) {
-    var request = codifyAudioEntry(name, author)
+func (p *Player) getURL(request string) string {
     var url = fmt.Sprintf("http://localhost:8080/audio?file=%s", request)
     if (request == "") {
         log.Fatal("Cannot make empty request")
         panic(1)
     }
+	return url
+}
+
+func (p *Player) makeAudioRequest(name string, author string, duration int64) {
+    var request = codifyAudioEntry(name, author)
+	fmt.Printf("[client] Requesting: %s by %s\n", name, author)
+
+	var url = p.getURL(request)
 
     response := p.makeGetRequest(url)
 	defer response.Body.Close()
 
-    decoder, format := p.loadStreamerFormat(response)
-    defer decoder.Close()
+    streamer, format := p.loadStreamerFormat(response)
+    defer streamer.Close()
 
 	// Initialize the speaker with the audio format
     speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 
 	// Play the audio stream
 	var done = make(chan bool)
-	speaker.Play(beep.Seq(decoder, beep.Callback(func() {
+	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
 	    speaker.Clear()
 	    close(done)
 	})))
 
     for {
         if (p.killThreadSignal) {
-            fmt.Println("[client: makeAudioRequest] finished playback")
+			fmt.Printf("[client: makeAudioRequest] finished playback\n")
             speaker.Clear()
             <-done
             close(done)
@@ -109,12 +132,13 @@ func (p *Player) makeAudioRequest(name string, author string, duration int64) {
         }
 
         // calculate elapsed time in seconds
-        var elapsed int64 = int64(format.SampleRate.D(decoder.Position()).Round(time.Second) / 1000000000)
+        var elapsed int64 = int64(format.SampleRate.D(streamer.Position()).Round(time.Second) / 1000000000)
         var percent = float64(elapsed) / float64(duration)
 
-        if p.verbose {
-            fmt.Printf("[client] elapsed time: %d, duration: %d, percentage: %.2f\n", elapsed, duration, percent)
-        }
+		//p.guardedPrint("[client] elapsed time: %d, duration: %d, percentage: %.2f\n", elapsed, duration, percent)
+		if p.verbose {
+			fmt.Printf("[client] elapsed time: %d, duration: %d, percentage: %.2f\n", elapsed, duration, percent)
+		}
 
         p.elapsedTime.Set(percent)
         if percent >= 1.0 {
@@ -133,12 +157,35 @@ func (p *Player) playSong(name string, author string, duration int64) {
     time.Sleep(time.Second / 5)
     // turn shutdown signal off so that new thread can play next song
     p.killThreadSignal = false
+
     go func() {
         p.playing = true
         p.makeAudioRequest(name, author, duration) // false at the end is for turning off verbose
     }()
 }
 
-func main() {
-    fmt.Println("test")
+func fetchAudioList() []Audio {
+    response, err := http.Get("http://localhost:8080/availableAudio")
+    if err != nil {
+        log.Fatal("Failed to make GET request: ", err)
+    }
+    defer response.Body.Close()
+
+    if response.StatusCode != http.StatusOK {
+        log.Fatal("Server responded with status: ", response.Status)
+    }
+
+    // parse response.Body
+    var result []Audio
+    body, err := ioutil.ReadAll(response.Body)
+    if err != nil {
+        panic(err)
+    }
+
+    err = json.Unmarshal(body, &result)
+    if err != nil {
+        panic(err)
+    }
+
+    return result
 }
