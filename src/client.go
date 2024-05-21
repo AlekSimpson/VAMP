@@ -27,6 +27,8 @@ func pauseAudio(as *AppState) {
     }
 }
 
+
+
 func makeSideBar(as *AppState) fyne.CanvasObject {
 	pauseButton := widget.NewButton("Pause", func() {
 		pauseAudio(as)
@@ -47,11 +49,60 @@ func makeSideBar(as *AppState) fyne.CanvasObject {
 	return test
 }
 
+func makePlaybackControl() fyne.CanvasObject {
+    // hstack with repeat, skip back, pause/play, skip forward, shuffle 
+    repeat := widget.NewButton("Repeat", func() {
+        fmt.Println("repeat song selected")
+    }) 
+
+    skipBack := widget.NewButton("Skip Back", func() {
+        fmt.Println("skipping backwards")
+    })
+
+    togglePause := widget.NewButton("Pause", func() {
+        fmt.Println("paused")
+    })
+
+    skipForward := widget.NewButton("Skip Forward", func() {
+        fmt.Println("skipping forwards")
+    })
+
+    shuffle := widget.NewButton("Shuffle", func() {
+        fmt.Println("shuffling")
+    })
+
+    hbox := container.NewHBox(
+        repeat, skipBack, togglePause, skipForward, shuffle,
+    )
+
+    return hbox
+}
+
+func makePlaybackView() fyne.CanvasObject {
+    // audio cover, progress bar (name and author overlayed over progress bar)
+    return nil
+}
+
+// Parts of the layout
+// Top Bar
+//   - playback controls: skip song, pause/play, repeat, shuffle
+//      + makePlaybackControl() -> fyne.CanvasObject
+//   - playback view: audio cover, progress bar, name of audio and author
+//      + makePlaybackView() -> fyne.CanvasObject
+//  + makePlayback() -> fyne.CanvasObject
+// Left Side Bar
+//   - button to go to sign in/sign out
+//      + makeAccountButton() -> fyne.CanvasObject
+//   - Lists all audio sets
+//      + makeAudioSetsListView() -> fyne.CanvasObject
+// Middle Content: audio set
+//  + makeAudioListView() -> fyne.CanvasObject
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("VAMP")
 
-    audioRaw := fetchAudioList()
+    audioRaw := fetchAudioList() // TODO: MAKE THIS FASTER (caching?, lazying loading?)
 
     elapsedBinding := binding.NewFloat()
     progressBar := widget.NewProgressBarWithData(elapsedBinding)
@@ -76,13 +127,16 @@ func main() {
         })
 
 	bar := makeSideBar(&as)
+    plbControl := makePlaybackControl()
 
-    root := fyne.NewContainerWithLayout(layout.NewBorderLayout(nil, progressBar, bar, nil), bar, progressBar, list)
+    root := fyne.NewContainerWithLayout(layout.NewBorderLayout(plbControl, progressBar, bar, nil), plbControl, bar, progressBar, list)
 
 	w.SetContent(root)
     w.Resize(fyne.NewSize(1920, 1080))
 	w.ShowAndRun()
 }
+
+
 
 // TODO
 // Update layout
