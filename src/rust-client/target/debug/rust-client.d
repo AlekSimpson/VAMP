@@ -1,1 +1,0 @@
-/Users/aleksimpson/Desktop/projects/VAMP/src/rust-client/target/debug/rust-client: /Users/aleksimpson/Desktop/projects/VAMP/src/rust-client/src/main.rs /Users/aleksimpson/Desktop/projects/VAMP/src/rust-client/src/styles.css
