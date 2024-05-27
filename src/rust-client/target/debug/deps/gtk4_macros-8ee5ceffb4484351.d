@@ -1,0 +1,9 @@
+/Users/aleksimpson/Desktop/projects/VAMP/src/rust-client/target/debug/deps/libgtk4_macros-8ee5ceffb4484351.dylib: /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/lib.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/attribute_parser.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/composite_template_derive.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/template_callbacks_attribute.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/util.rs
+
+/Users/aleksimpson/Desktop/projects/VAMP/src/rust-client/target/debug/deps/gtk4_macros-8ee5ceffb4484351.d: /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/lib.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/attribute_parser.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/composite_template_derive.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/template_callbacks_attribute.rs /Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/util.rs
+
+/Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/lib.rs:
+/Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/attribute_parser.rs:
+/Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/composite_template_derive.rs:
+/Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/template_callbacks_attribute.rs:
+/Users/aleksimpson/.cargo/registry/src/index.crates.io-6f17d22bba15001f/gtk4-macros-0.8.2/src/util.rs:

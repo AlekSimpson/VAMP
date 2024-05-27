@@ -33,8 +33,8 @@ func readAudio(filename string) []byte {
         f = filename + ".mp3"
     }
 
-    var filepath = fmt.Sprintf("../assets/%s", f)
-    data, err := ioutil.ReadFile(filepath)
+    var filepath = fmt.   Sprintf("../assets/audio-assets/%s", f)
+    data, err   := ioutil.ReadFile(filepath)
     if err != nil {
         fatalServerLog("cannot read audio file", "readAudio")
     }
@@ -92,11 +92,11 @@ func prettify(name string) string {
 
 func processFilename(filename string) FileModel {
     var delimited = strings.Split(filename, "_")
-    name := delimited[0];
-    author := delimited[1];
+    name         := delimited[0];
+    author       := delimited[1];
 
     // process strings to be a bit more readable
-    name = prettify(name)
+    name   = prettify(name)
     author = prettify(author)
 
     // get duration 
@@ -107,7 +107,7 @@ func processFilename(filename string) FileModel {
 
 func getAvailableAudio(w http.ResponseWriter, r *http.Request) {
     // get audio file names
-    files, err := ioutil.ReadDir("../assets/")
+    files, err := ioutil.ReadDir("../assets/audio-assets/")
     if err != nil {
         fatalServerLog(fmt.Sprintf("Error reading directory %s", err), "getAvailableAudio")
     }
