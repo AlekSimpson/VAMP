@@ -13,9 +13,10 @@
 // Middle Content: audio set
 //  + makeAudioListView() -> fyne.CanvasObject
 
+use std::process::ExitCode;
 use gdk::Display;
-use gtk::prelude::*;
-use gtk::*;
+use gtk4::prelude::*;
+use gtk4::*;
 
 const APP_ID: &str = "org.vamp.rust-client";
 
@@ -28,7 +29,7 @@ fn build_scrollview() -> ScrolledWindow {
     }
 
     let scrolled_window = ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
+        .hscrollbar_policy(gtk4::PolicyType::Never) // Disable horizontal scrolling
         .min_content_width(360)
         .child(&list_box)
         .build();
@@ -37,7 +38,7 @@ fn build_scrollview() -> ScrolledWindow {
 }
 
 fn build_ui(app: &Application) {
-    let container = gtk::Box::builder()
+    let container = gtk4::Box::builder()
         .css_name("container")
         .build();
 
@@ -66,10 +67,10 @@ fn load_css() {
     provider.load_from_string(include_str!("styles.css"));
 
     // Add the provider to the default screen
-    gtk::style_context_add_provider_for_display(
+    gtk4::style_context_add_provider_for_display(
         &Display::default().expect("Could not connect to a display."),
         &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
 }
 
